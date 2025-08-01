@@ -1,0 +1,40 @@
+include:
+  - local: '.gitlab-ci.yml'
+
+reformat:
+  stage: .pre
+  image:
+    name: "${DOCKER_HUB_REGISTRY}/${TERRAFORM_CI_IMAGE}"
+    entrypoint: [""]
+  script:
+    - terraform fmt -recursive .
+  artifacts:
+    paths:
+      - '*.tf'
+      - 'test/*.tf'
+    expire_in: 1 day
+
+readme:
+  stage: .pre
+  image:
+    name: "${QUAY_IO_REGISTRY}/${TERRAFORM_DOCS_CI_IMAGE}"
+    entrypoint: [""]
+  script:
+    - terraform-docs markdown table --output-file README.md --output-mode inject .
+  artifacts:
+    paths:
+      - README.md
+    expire_in: 1 day
+
+upgrade-test-lock:
+  stage: .pre
+  image:
+    name: "${DOCKER_HUB_REGISTRY}/${TERRAFORM_CI_IMAGE}"
+    entrypoint: [""]
+  script:
+    - cd test
+    - terraform init -upgrade
+  artifacts:
+    paths:
+      - test/.terraform.lock.hcl
+    expire_in: 1 day

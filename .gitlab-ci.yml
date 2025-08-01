@@ -1,0 +1,133 @@
+default:
+  interruptible: true
+
+stages:
+  - lint
+  - test
+  - build
+  - scan
+  - publish
+
+variables:
+  TERRAFORM_MODULE_NAME: org-governance
+  TERRAFORM_MODULE_SYSTEM: aws
+  DOCKER_HUB_REGISTRY: docker.io
+  GHCR_REGISTRY: ghcr.io
+  QUAY_IO_REGISTRY: quay.io
+  TERRAFORM_CI_IMAGE: hashicorp/terraform:1.12.2
+  TRIVY_CI_IMAGE: aquasec/trivy:0.65.0
+  CI_VERSION_TOOLS_IMAGE: alikov/ci-version-tools:0.2.0
+  TFLINT_CI_IMAGE: terraform-linters/tflint:v0.58.1
+  CURL_IMAGE: curlimages/curl:8.15.0
+  TERRAFORM_DOCS_CI_IMAGE: terraform-docs/terraform-docs:0.20.0
+  TRIVY_NO_PROGRESS: "true"
+  # https://aquasecurity.github.io/trivy/v0.49/docs/configuration/filtering/#trivyignoreyaml
+  TRIVY_IGNOREFILE: ./.trivyignore.yaml
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "web"
+    # https://docs.gitlab.com/ci/pipelines/downstream_pipelines/#dynamic-child-pipelines
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+.with-trivy-cache:
+  variables:
+    TRIVY_CACHE_DIR: ci/cache/trivy
+  cache:
+    - key: trivy
+      paths:
+        - $TRIVY_CACHE_DIR
+
+version:
+  image: "${DOCKER_HUB_REGISTRY}/${CI_VERSION_TOOLS_IMAGE}"
+  stage: .pre
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - project-version
+        --version-source file
+        --version-source-file ./VERSION
+        --git-version-tag-prefix v
+        ${CI_COMMIT_TAG:+--git-tag "$CI_COMMIT_TAG"}
+        env-vars | tee version.env
+  artifacts:
+    reports:
+      dotenv: version.env
+
+docs:
+  stage: lint
+  image:
+    name: "${QUAY_IO_REGISTRY}/${TERRAFORM_DOCS_CI_IMAGE}"
+    entrypoint: [""]
+  script:
+    - terraform-docs markdown table --output-check --output-file README.md --output-mode inject .
+  needs: []
+
+iac-check:
+  extends: .with-trivy-cache
+  stage: lint
+  image:
+    name: "${DOCKER_HUB_REGISTRY}/${TRIVY_CI_IMAGE}"
+    entrypoint: [""]
+  script:
+    - trivy config --exit-code 3 .
+  needs: []
+
+tflint:
+  stage: lint
+  image:
+    name: "${GHCR_REGISTRY}/${TFLINT_CI_IMAGE}"
+    entrypoint: [""]
+  script:
+    - tflint
+  needs: []
+
+fmt:
+  stage: lint
+  image:
+    name: "${DOCKER_HUB_REGISTRY}/${TERRAFORM_CI_IMAGE}"
+    entrypoint: [""]
+  script:
+    - terraform fmt -check -diff -recursive .
+  needs: []
+
+validate:
+  stage: test
+  image:
+    name: "${DOCKER_HUB_REGISTRY}/${TERRAFORM_CI_IMAGE}"
+    entrypoint: [""]
+  script:
+    - cd test
+    - terraform init -lockfile=readonly
+    - terraform validate
+
+build:
+  stage: build
+  image:
+    name: "${DOCKER_HUB_REGISTRY}/${TERRAFORM_CI_IMAGE}"
+    entrypoint: [""]
+  script:
+    - mkdir -p build
+    - tar -C "$CI_PROJECT_DIR" -czf "build/${TERRAFORM_MODULE_NAME}-${TERRAFORM_MODULE_SYSTEM}-${VERSION_WITHOUT_BUILD_METADATA}.tgz" *.tf README.md LICENSE
+  artifacts:
+    paths:
+      - build
+
+publish:
+  stage: publish
+  image:
+    name: "${DOCKER_HUB_REGISTRY}/${CURL_IMAGE}"
+    entrypoint: [""]
+  script:
+    - UPLOAD_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/terraform/modules/${TERRAFORM_MODULE_NAME}/${TERRAFORM_MODULE_SYSTEM}/${VERSION_WITHOUT_BUILD_METADATA}/file"
+    - TAR_FILENAME="${TERRAFORM_MODULE_NAME}-${TERRAFORM_MODULE_SYSTEM}-${VERSION_WITHOUT_BUILD_METADATA}.tgz"
+    - 'curl --fail-with-body --location --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "build/${TAR_FILENAME}" "${UPLOAD_URL}"'
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: manual
+      allow_failure: true
