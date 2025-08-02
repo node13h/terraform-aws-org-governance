@@ -45,6 +45,7 @@ variable "allowed_actions" {
     "organizations:List*",
     "pricing:*",
     "route53:*",
+    "route53domains:*",
     "resource-explorer-2:*",
     "s3:*",
     "support:*",
