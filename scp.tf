@@ -9,6 +9,7 @@ data "aws_iam_policy_document" "constraints_scp" {
       "iam:*",
       "organizations:*",
       "route53:*",
+      "route53domains:*",
       "support:*",
       "ce:*",
     ]
