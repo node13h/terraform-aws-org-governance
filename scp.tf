@@ -34,10 +34,10 @@ data "aws_iam_policy_document" "constraints_scp" {
     sid       = "DenyUnsupportedInstanceTypes"
     effect    = "Deny"
     actions   = ["ec2:RunInstances"]
-    resources = ["*"]
+    resources = ["arn:aws:ec2:*:*:instance/*"]
 
     condition {
-      test     = "StringNotEqualsIfExists"
+      test     = "StringNotEquals"
       variable = "ec2:InstanceType"
       values   = var.allowed_ec2_instance_types
     }
