@@ -48,6 +48,7 @@ variable "allowed_actions" {
     "route53domains:*",
     "resource-explorer-2:*",
     "s3:*",
+    "sts:*",
     "support:*",
     "servicequotas:*",
     "ssm:*",
