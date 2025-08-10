@@ -12,6 +12,7 @@ data "aws_iam_policy_document" "constraints_scp" {
       "route53domains:*",
       "support:*",
       "ce:*",
+      "cloudtrail:*",
     ]
     resources = ["*"]
 
