@@ -57,6 +57,7 @@ variable "allowed_actions" {
     "servicecatalog:*",
     "securityhub:*",
     "secretsmanager:*",
+    "acm:*",
   ]
   description = "Allowed IAM actions"
 }
