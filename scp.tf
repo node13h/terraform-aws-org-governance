@@ -13,6 +13,7 @@ data "aws_iam_policy_document" "constraints_scp" {
       "support:*",
       "ce:*",
       "cloudtrail:*",
+      "logs:*",
     ]
     resources = ["*"]
 
